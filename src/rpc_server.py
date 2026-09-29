@@ -1,8 +1,8 @@
 import socket
 import struct
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as xml_tree
 
-import model
+from . import model
 
 
 OPERATIONS = {
@@ -30,7 +30,7 @@ def receive_exactly(connection, size):
 
 
 def value_to_xml(value, tag):
-    element = ET.Element(tag)
+    element = xml_tree.Element(tag)
     if isinstance(value, tuple):
         element.set("type", "tuple")
         for item in value:
@@ -54,39 +54,67 @@ def value_from_xml(element):
 
 
 def make_body(tag, value):
-    return ET.tostring(value_to_xml(value, tag), encoding="utf-8")
+    return xml_tree.tostring(value_to_xml(value, tag), encoding="utf-8")
+
+
+def execute_request(operation, body):
+    try:
+        name = OPERATIONS.get(operation)
+        if name is None:
+            raise ValueError("Неизвестный код операции")
+        root = xml_tree.fromstring(body)
+        if root.tag != "arguments":
+            raise ValueError("Ожидается элемент arguments")
+        arguments = value_from_xml(root)
+        if not isinstance(arguments, tuple):
+            raise ValueError(
+                "Аргументы должны быть кортежем"
+            )
+        return make_body("result", getattr(model, name)(*arguments))
+    except (ValueError, TypeError, xml_tree.ParseError) as error:
+        return make_body("error", str(error))
 
 
 class RPCServer:
-    def __init__(self, host="127.0.0.1", port=5000):
+    def __init__(
+        self, host="127.0.0.1", port=5000, stop_event=None, ready_event=None
+    ):
         self.host = host
         self.port = port
+        self.stop_event = stop_event
+        self.ready_event = ready_event
 
     def serve_forever(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
             server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server.bind((self.host, self.port))
+            self.port = server.getsockname()[1]
             server.listen()
+            if self.stop_event is not None:
+                server.settimeout(0.1)
+            if self.ready_event is not None:
+                self.ready_event.set()
             print(f"RPC-сервер запущен: {self.host}:{self.port}")
-            while True:
-                connection, _ = server.accept()
+            while self.stop_event is None or not self.stop_event.is_set():
+                try:
+                    connection, _ = server.accept()
+                except socket.timeout:
+                    continue
                 with connection:
-                    self.handle_connection(connection)
+                    try:
+                        self.handle_connection(connection)
+                    except OSError as error:
+                        print(f"RPC transport error: {error}")
 
     def handle_connection(self, connection):
         header = receive_exactly(connection, 6)
         body_size, operation = struct.unpack("<IH", header)
         body = receive_exactly(connection, body_size)
-        arguments = value_from_xml(ET.fromstring(body))
-        print(f"RPC request: {OPERATIONS[operation]}{arguments}")
+        print(f"RPC request: op={operation}, body={body!r}")
+        response_body = execute_request(operation, body)
 
-        try:
-            result = getattr(model, OPERATIONS[operation])(*arguments)
-            response_body = make_body("result", result)
-        except ValueError as error:
-            response_body = make_body("error", str(error))
-
-        connection.sendall(struct.pack("<IH", len(response_body), operation) + response_body)
+        response_header = struct.pack("<IH", len(response_body), operation)
+        connection.sendall(response_header + response_body)
         print(f"RPC response: {response_body.decode('utf-8')}")
 
 

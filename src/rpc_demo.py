@@ -1,6 +1,6 @@
 from time import time
 
-from rpc_client import RPCClient
+from .rpc_client import RPCClient
 
 
 client = RPCClient()

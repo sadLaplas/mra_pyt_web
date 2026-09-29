@@ -49,6 +49,22 @@
 ./run_demo.sh
 ```
 
+## Этап 3. Тестирование на основе модели
+
+Тест `tests/test_rpc_mbt.py` использует `RuleBasedStateMachine` из
+`hypothesis`: его упрощённая модель сравнивается с состоянием RPC-сервера
+после каждого сгенерированного вызова. Все 10 методов клиента покрываются
+только сгенерированными Hypothesis последовательностями.
+
+Зависимости и запуск с отчётом о покрытии ветвей:
+
+```text
+python3 -m pip install -r requirements.txt
+./run_tests.sh
+```
+
+Отчёт сохраняется в `coverage_report.txt`.
+
 ## Структура
 
 ```text
@@ -61,7 +77,11 @@ variant6/
 │   └── rpc_server.py
 ├── .gitignore
 ├── README.md
+├── requirements.txt
 ├── run_demo.sh
 ├── run_server.sh
+├── run_tests.sh
+├── tests/
+│   └── test_rpc_mbt.py
 └── run.sh
 ```

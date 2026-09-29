@@ -1,8 +1,13 @@
 import socket
 import struct
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as xml_tree
 
-from rpc_server import OPERATIONS, receive_exactly, value_from_xml, value_to_xml
+from .rpc_server import (
+    OPERATIONS,
+    receive_exactly,
+    value_from_xml,
+    value_to_xml,
+)
 
 
 class RPCClient:
@@ -11,7 +16,9 @@ class RPCClient:
         self.port = port
 
     def call(self, operation, *arguments):
-        request_body = ET.tostring(value_to_xml(arguments, "arguments"), encoding="utf-8")
+        request_body = xml_tree.tostring(
+            value_to_xml(arguments, "arguments"), encoding="utf-8"
+        )
         with socket.create_connection((self.host, self.port)) as connection:
             connection.sendall(
                 struct.pack("<IH", len(request_body), operation) + request_body
@@ -20,7 +27,7 @@ class RPCClient:
             body_size, _ = struct.unpack("<IH", header)
             response_body = receive_exactly(connection, body_size)
 
-        response = ET.fromstring(response_body)
+        response = xml_tree.fromstring(response_body)
         if response.tag == "error":
             raise ValueError(value_from_xml(response))
         return value_from_xml(response)
@@ -52,5 +59,7 @@ class RPCClient:
     def get_outputs(self):
         return self.call(9)
 
-    def recent_messages_with_outputs(self):
-        return self.call(10)
+    def recent_messages_with_outputs(self, now=None):
+        if now is None:
+            return self.call(10)
+        return self.call(10, now)

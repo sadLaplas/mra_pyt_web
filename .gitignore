@@ -1,6 +1,12 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+.coverage*
+.hypothesis/
+htmlcov/
+coverage.xml
+coverage.json
 .venv/
 venv/
 .idea/

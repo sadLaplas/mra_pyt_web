@@ -4,11 +4,21 @@ FIVE_MINUTES = 5 * 60
 USERS = []
 MESSAGES = []
 OUTPUTS = []
+USER_TYPES = (int, int, str)
+MESSAGE_TYPES = (int, int, str, int, str, int)
+OUTPUT_TYPES = (int, int, str, str, str, int, int)
+
+
+def validate_record(record, field_types):
+    if not isinstance(record, tuple) or len(record) != len(field_types):
+        raise ValueError("Некорректная структура записи")
+    for value, expected_type in zip(record, field_types):
+        if isinstance(value, bool) or not isinstance(value, expected_type):
+            raise ValueError("Неверный тип поля")
 
 
 def create_user(record):
-    if not isinstance(record, tuple) or len(record) != 3:
-        raise ValueError("User должен быть кортежем из 3 полей")
+    validate_record(record, USER_TYPES)
     if any(user[0] == record[0] for user in USERS):
         raise ValueError(f"User с key={record[0]} уже существует")
     USERS.append(record)
@@ -16,7 +26,8 @@ def create_user(record):
 
 
 def delete_user(key):
-    """Удалить запись User по ключу."""
+    if any(message[3] == key for message in MESSAGES):
+        raise ValueError("Сначала удалите сообщения пользователя")
     for index, user in enumerate(USERS):
         if user[0] == key:
             return USERS.pop(index)
@@ -28,8 +39,7 @@ def get_users():
 
 
 def create_message(record):
-    if not isinstance(record, tuple) or len(record) != 6:
-        raise ValueError("Message должен быть кортежем из 6 полей")
+    validate_record(record, MESSAGE_TYPES)
     if any(message[0] == record[0] for message in MESSAGES):
         raise ValueError(
             f"Message с key={record[0]} уже существует"
@@ -41,7 +51,8 @@ def create_message(record):
 
 
 def delete_message(key):
-    """Удалить запись Message по ключу."""
+    if any(output[5] == key for output in OUTPUTS):
+        raise ValueError("Сначала удалите ответы сообщения")
     for index, message in enumerate(MESSAGES):
         if message[0] == key:
             return MESSAGES.pop(index)
@@ -54,8 +65,7 @@ def get_messages():
 
 
 def create_output(record):
-    if not isinstance(record, tuple) or len(record) != 7:
-        raise ValueError("Output должен быть кортежем из 7 полей")
+    validate_record(record, OUTPUT_TYPES)
     if any(output[0] == record[0] for output in OUTPUTS):
         raise ValueError(
             f"Output с key={record[0]} уже существует"
@@ -93,4 +103,4 @@ def recent_messages_with_outputs(now=None):
                     result.append(
                         (message[2], output[2], user[2])
                     )
-    return tuple(result)
+    return tuple(dict.fromkeys(result))
