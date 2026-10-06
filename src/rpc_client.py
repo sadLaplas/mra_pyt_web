@@ -1,7 +1,5 @@
-"""Клиент с десятью методами, соответствующими функциям модели."""
-
 import socket
-import xml.etree.ElementTree as xml_tree
+from xml.etree.ElementTree import fromstring
 
 from .rpc_server import (
     CONNECTION_TIMEOUT,
@@ -15,8 +13,6 @@ from .rpc_server import (
 
 
 class RPCClient:
-    """Отправлять по одному вызову на TCP-соединение."""
-
     def __init__(self, host=HOST, port=PORT):
         self.host = host
         self.port = port
@@ -30,7 +26,7 @@ class RPCClient:
             size, response_operation = HEADER.unpack(
                 receive_exactly(connection, HEADER.size)
             )
-            response = xml_tree.fromstring(receive_exactly(connection, size))
+            response = fromstring(receive_exactly(connection, size))
         if response_operation != operation:
             raise ValueError("Неверный код операции в ответе")
         if response.tag == "error":

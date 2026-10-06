@@ -1,12 +1,9 @@
-"""Демонстрация всех десяти операций через TCP-клиент."""
-
 from time import time
 
 from .rpc_client import RPCClient
 
 
 def demonstrate(client):
-    """Создать связанные записи, получить выборку и удалить записи."""
     timestamp = int(time())
     print(client.create_user((1, timestamp, "web")))
     print(client.get_users())
@@ -29,7 +26,6 @@ def demonstrate(client):
 
 
 def run_demo(host="127.0.0.1", port=5000):
-    """Выполнить демонстрацию на пустом RPC-сервере."""
     demonstrate(RPCClient(host, port))
 
 

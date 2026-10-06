@@ -1,10 +1,7 @@
-"""TCP RPC варианта 6: XML, заголовок <IH, журнал в stdout."""
-
 import socket
 import struct
-import xml.etree.ElementTree as xml_tree
 from base64 import b64decode, b64encode
-from binascii import Error as Base64Error
+from xml.etree.ElementTree import Element, ParseError, fromstring, tostring
 
 from .model import FUNCTIONS
 
@@ -20,7 +17,6 @@ OPERATIONS = dict(enumerate(FUNCTIONS, start=FIRST_OPERATION))
 
 
 def receive_exactly(connection, size):
-    """Прочитать ровно size байтов даже при фрагментации TCP."""
     data = b""
     while len(data) < size:
         part = connection.recv(size - len(data))
@@ -31,8 +27,7 @@ def receive_exactly(connection, size):
 
 
 def value_to_xml(value, tag):
-    """Кодировать кортеж, int или str с явным указанием типа."""
-    element = xml_tree.Element(tag)
+    element = Element(tag)
     if isinstance(value, tuple):
         element.set("type", "tuple")
         for item in value:
@@ -50,7 +45,6 @@ def value_to_xml(value, tag):
 
 
 def value_from_xml(element):
-    """Восстановить кортежи и скалярные значения из XML."""
     value_type = element.get("type")
     if value_type == "tuple":
         return tuple(value_from_xml(item) for item in element)
@@ -64,29 +58,26 @@ def value_from_xml(element):
 
 
 def make_body(tag, value):
-    """Создать XML-тело в байтах UTF-8."""
-    return xml_tree.tostring(value_to_xml(value, tag), encoding="utf-8")
+    return tostring(value_to_xml(value, tag), encoding="utf-8")
 
 
 def execute_request(operation, body):
-    """Выполнить одну из десяти функций или вернуть XML-ошибку."""
     try:
         function = OPERATIONS.get(operation)
         if function is None:
             raise ValueError("Неизвестный код операции")
-        root = xml_tree.fromstring(body)
+        root = fromstring(body)
         if root.tag != "arguments":
             raise ValueError("Ожидается элемент arguments")
         arguments = value_from_xml(root)
         if not isinstance(arguments, tuple):
             raise ValueError("Ожидается кортеж аргументов")
         return make_body("result", function(*arguments))
-    except (ValueError, TypeError, Base64Error, xml_tree.ParseError) as error:
+    except (ValueError, TypeError, ParseError) as error:
         return make_body("error", str(error))
 
 
 def handle_connection(connection):
-    """Прочитать запрос, вывести запрос и ответ, отправить ответ."""
     header = receive_exactly(connection, HEADER.size)
     body_size, operation = HEADER.unpack(header)
     body = receive_exactly(connection, body_size)
@@ -97,7 +88,6 @@ def handle_connection(connection):
 
 
 def serve_connections(server, stop_event=None):
-    """Обрабатывать подключения до сигнала остановки."""
     while stop_event is None or not stop_event.is_set():
         try:
             connection, _ = server.accept()
@@ -112,7 +102,6 @@ def serve_connections(server, stop_event=None):
 
 
 def run_server(host=HOST, port=PORT, stop_event=None, ready=None):
-    """Запустить сервер; ready при наличии получает (host, port)."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((host, port))

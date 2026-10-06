@@ -1,12 +1,9 @@
-"""Интерактивный вызов десяти функций модели с литералами Python."""
-
 from ast import literal_eval
 
 from .model import FUNCTIONS
 
 
 def print_help():
-    """Показать имена функций и формат передачи аргументов."""
     print("Команды: help, exit и функции модели:")
     for function in FUNCTIONS:
         print(" ", function.__name__)
@@ -16,7 +13,6 @@ def print_help():
 
 
 def execute_command(command):
-    """Выполнить команду без исполнения произвольного Python-кода."""
     name, _, text = command.partition(" ")
     functions = {function.__name__: function for function in FUNCTIONS}
     function = functions.get(name)
@@ -27,7 +23,6 @@ def execute_command(command):
 
 
 def run_repl():
-    """Читать команды до exit или завершения стандартного ввода."""
     print_help()
     while True:
         try:

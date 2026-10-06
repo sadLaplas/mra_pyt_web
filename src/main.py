@@ -1,5 +1,3 @@
-"""Общая точка входа: repl, server или demo."""
-
 from argparse import ArgumentParser
 
 from .repl import run_repl
@@ -8,7 +6,6 @@ from .rpc_server import HOST, PORT, run_server
 
 
 def main():
-    """Выбрать режим и параметры подключения из командной строки."""
     parser = ArgumentParser(description="Вариант 6: модель и TCP RPC")
     parser.add_argument(
         "mode", nargs="?", default="repl",

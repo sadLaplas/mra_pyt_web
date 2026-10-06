@@ -60,7 +60,6 @@ def delete_message(key):
 
 
 def get_messages():
-    """Получить все записи Message."""
     return tuple(MESSAGES)
 
 
