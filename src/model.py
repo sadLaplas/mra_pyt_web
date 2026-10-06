@@ -60,7 +60,6 @@ def delete_message(key):
 
 
 def get_messages():
-    """Получить все записи Message."""
     return tuple(MESSAGES)
 
 
@@ -87,22 +86,31 @@ def get_outputs():
     return tuple(OUTPUTS)
 
 
+def _right_join_users_messages(users, messages):
+    missing_user = (None,) * len(USER_TYPES)
+    result = []
+    for message in messages:
+        matched = False
+        for user in users:
+            if user[0] == message[3]:
+                result.append((user, message))
+                matched = True
+        if not matched:
+            result.append((missing_user, message))
+    return tuple(result)
+
+
 def recent_messages_with_outputs(now=None):
     current_time = int(time()) if now is None else now
     cutoff = current_time - FIVE_MINUTES
+    joined = _right_join_users_messages(USERS, MESSAGES)
     result = []
-
-    for user in USERS:
-        if user[1] <= cutoff:
-            continue
-        for message in MESSAGES:
-            if message[3] != user[0]:
+    for user, message in joined:
+        for output in OUTPUTS:
+            if message[0] != output[5]:
                 continue
-            for output in OUTPUTS:
-                if output[5] == message[0]:
-                    result.append(
-                        (message[2], output[2], user[2])
-                    )
+            if user[1] is not None and user[1] > cutoff:
+                result.append((message[2], output[2], user[2]))
     return tuple(dict.fromkeys(result))
 
 
