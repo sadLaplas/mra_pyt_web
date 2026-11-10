@@ -1,6 +1,6 @@
 [run]
 branch = True
-source = src.model,src.rpc_client,src.rpc_server
+source = src.http_server,src.http_store,src.http_client,src.ean8,src.task_runner
 
 [report]
 show_missing = True

@@ -11,28 +11,43 @@ LEFT = (
     "0001101", "0011001", "0010011", "0111101", "0100011",
     "0110001", "0101111", "0111011", "0110111", "0001011",
 )
+DATA_DIGITS = 7
+CODE_DIGITS = DATA_DIGITS + 1
 
 
 def normalize_code(code):
-    if not isinstance(code, str) or len(code) not in (7, 8):
+    """Дополнить семь цифр контрольной или проверить готовый код EAN-8.
+
+    Первые семь цифр имеют чередующиеся веса 3 и 1, начиная с 3.
+    Контрольная цифра дополняет взвешенную сумму до кратной десяти.
+    """
+    if not isinstance(code, str):
+        raise ValueError("EAN-8 requires a string")
+    if len(code) not in (DATA_DIGITS, CODE_DIGITS):
         raise ValueError("EAN-8 requires seven or eight ASCII digits")
     if any(char not in "0123456789" for char in code):
         raise ValueError("EAN-8 requires ASCII digits")
     total = sum(int(char) * (3 if index % 2 == 0 else 1)
-                for index, char in enumerate(code[:7]))
+                for index, char in enumerate(code[:DATA_DIGITS]))
     digit = str(-total % 10)
-    if len(code) == 8 and code[-1] != digit:
+    if len(code) == CODE_DIGITS and code[-1] != digit:
         raise ValueError("Invalid EAN-8 check digit")
-    return code[:7] + digit
+    return code[:DATA_DIGITS] + digit
 
 
 def png_chunk(kind, data):
+    """Собрать блок PNG с длиной, типом, содержимым и контрольной суммой."""
     checksum = zlib.crc32(kind + data)
     return (struct.pack(">I", len(data)) + kind + data
             + struct.pack(">I", checksum))
 
 
 def generate_png(code):
+    """Вернуть PNG-байты EAN-8 с полями по семь модулей и масштабом 3.
+
+    Правые цифры кодируются инверсией левых. Разделители имеют вид 101
+    и 01010. Нулевой байт перед строкой пикселей задаёт PNG-фильтр None.
+    """
     code = normalize_code(code)
     left = "".join(LEFT[int(char)] for char in code[:4])
     right = "".join(LEFT[int(char)] for char in code[4:])
@@ -48,6 +63,7 @@ def generate_png(code):
 
 
 def main():
+    """Прочитать JSON из входного файла и записать PNG по выходному пути."""
     parser = ArgumentParser(description="Generate an EAN-8 PNG")
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)

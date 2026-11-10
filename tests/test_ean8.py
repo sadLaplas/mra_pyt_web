@@ -1,3 +1,5 @@
+"""Проверки контрольной цифры, структуры PNG и файлового интерфейса CLI."""
+
 import json
 from pathlib import Path
 import struct
@@ -5,16 +7,19 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 import zlib
 
 from hypothesis import given, strategies as st
 
-from src.ean8 import generate_png, normalize_code
+from src.ean8 import generate_png, main, normalize_code
 
 
 def check_png():
+    """Проверить контрольную цифру и PNG на сгенерированных входах."""
     @given(st.text(alphabet="0123456789", min_size=7, max_size=7))
     def check(code):
+        """Сверить размеры изображения и распакованные строки пикселей."""
         normalized = normalize_code(code)
         assert normalize_code(normalized) == normalized
         assert sum(int(char) * (3 if index % 2 == 0 else 1)
@@ -28,6 +33,7 @@ def check_png():
 
 
 def check_cli():
+    """Сравнить результат CLI и прямого вызова для пяти примеров."""
     with TemporaryDirectory() as directory:
         for index, code in enumerate((
             "1234567", "9638507", "5512345", "0000000", "9999999"
@@ -40,10 +46,26 @@ def check_cli():
                 check=True,
             )
             assert target.read_bytes() == generate_png(code)
+            with patch("sys.argv", ["ean8", str(source), str(target)]):
+                main()
+            assert target.read_bytes() == generate_png(code)
+
+
+@given(st.sampled_from(("", "123456", "12345678", "１２３４５６７", None)))
+def check_invalid_code(code):
+    """Проверить отказ для неверной длины, типа, алфавита и контрольной."""
+    try:
+        normalize_code(code)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Invalid code accepted")
 
 
 def load_tests(loader, tests, pattern):
+    """Зарегистрировать функциональные тесты в стандартном unittest."""
     return unittest.TestSuite((
         unittest.FunctionTestCase(check_png),
         unittest.FunctionTestCase(check_cli),
+        unittest.FunctionTestCase(check_invalid_code),
     ))
