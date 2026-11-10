@@ -1,3 +1,5 @@
 hypothesis>=6.112,<7
 coverage>=7.6,<8
 pycodestyle>=2.12,<3
+python-barcode[images]>=0.15,<1
+requests>=2.32,<3
