@@ -5,11 +5,12 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 import zlib
 
 from hypothesis import given, strategies as st
 
-from src.ean8 import generate_png, normalize_code
+from src.ean8 import generate_png, main, normalize_code
 
 
 def check_png():
@@ -40,10 +41,24 @@ def check_cli():
                 check=True,
             )
             assert target.read_bytes() == generate_png(code)
+            with patch("sys.argv", ["ean8", str(source), str(target)]):
+                main()
+            assert target.read_bytes() == generate_png(code)
+
+
+@given(st.sampled_from(("", "123456", "12345678", "１２３４５６７", None)))
+def check_invalid_code(code):
+    try:
+        normalize_code(code)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Invalid code accepted")
 
 
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite((
         unittest.FunctionTestCase(check_png),
         unittest.FunctionTestCase(check_cli),
+        unittest.FunctionTestCase(check_invalid_code),
     ))

@@ -1,74 +1,68 @@
-# TCP RPC-приложение
+# Практическая работа №2, вариант 6 — EAN-8
 
-Управление записями User, Message и Output в памяти.
-Записи — кортежи; данные не сохраняются на диск. Требуется Python 3.11+.
+Установка зависимостей — `python3 -m pip install -r requirements.txt`.
 
-## Stage 1. Модель и REPL
+### Этап 1. Утилита
 
-| Функция | Назначение |
-| --- | --- |
-| `create_user(record)` | Создать пользователя |
-| `delete_user(key)` | Удалить пользователя без сообщений |
-| `get_users()` | Получить всех пользователей |
-| `create_message(record)` | Создать сообщение существующего пользователя |
-| `delete_message(key)` | Удалить сообщение без ответов |
-| `get_messages()` | Получить все сообщения |
-| `create_output(record)` | Создать ответ существующего сообщения |
-| `delete_output(key)` | Удалить ответ |
-| `get_outputs()` | Получить все ответы |
-| `recent_messages_with_outputs(now=None)` | Получить уникальные (data, response, platform) при User.timestamp > now − 300 |
+`python3 -m src.ean8 examples/ean8/01.json examples/ean8/01.png`
 
-Порядок полей: User — `(key, timestamp, platform)`;
-Message — `(key, timestamp, data, user, stage, enqueued)`;
-Output — `(key, timestamp, response, stage, error, message, cache_hit)`.
-Ключи, время, ссылки и cache_hit — int; остальные поля — str.
-Ошибки типов, ключей и связей вызывают ValueError.
-Если now не задан, используется текущее время в секундах.
-Выборка выполняет правое внешнее соединение User с Message, затем соединяет
-результат с Output и применяет фильтры формулы. Сообщение без пользователя
-сохраняется в промежуточном JOIN, но исключается фильтром User.timestamp.
+Вход — JSON с полем `code`, строкой из семи или восьми ASCII-цифр.
+Для семи цифр вычисляется восьмая контрольная цифра, для восьми проверяется.
+Результат — PNG с EAN-8, масштабом три пикселя на модуль и свободными
+полями по семь модулей. Пять входов и PNG находятся в `examples/ean8`.
 
-Запуск: `./run.sh`. Команды REPL совпадают с именами функций.
-Пример создания, чтения, ошибки повторного ключа и удаления:
+### Этап 2. HTTP и файловое хранилище
 
-```text
-create_user (1, 1000, 'web')
-get_users
-create_user (1, 1000, 'web')
-delete_user 1
-exit
+`python3 -m src.http_server --database data.json`
+
+Задания выполняются последовательно в фоновом потоке через subprocess
+с вызовом CLI. Запись Message возвращается сразу со стадией `queued`.
+После выполнения стадия становится `done` или `failed`. Output.response
+содержит PNG в Base64, Output.error — сообщение об ошибке.
+`--test-mode` заменяет вычисление фиксированным ответом `test`.
+При перезапуске сохранённые задания со стадией `queued` запускаются повторно.
+Удаление Message удаляет связанные Output и исключает публикацию его
+отложенного результата. Данные сохраняются после каждой операции.
+
+Обязательные заголовки — `Content-Type: application/json` для POST/PUT/PATCH
+и `Accept-Language: en` для всех методов. При нарушении возвращаются
+415 и 406 в указанном порядке. Ошибки входных данных возвращают 400,
+неизвестные маршруты — 404. Успешные ответы имеют код 200 и тело JSON.
+
+| Метод | Маршрут | Тело |
+| --- | --- | --- |
+| POST | /private/api/user/make | `[key, timestamp, platform]` |
+| DELETE | /private/api/user/pop/:key | — |
+| POST | /private/api/user/all | объект фильтров по полям |
+| POST | /private/api/message/make | `[key, timestamp, data, user, stage, enqueued]` |
+| DELETE | /private/api/message/pop/:key | — |
+| POST | /private/api/message/all/:user | объект фильтров |
+| POST | /private/api/output/all/:message | объект фильтров |
+| POST | /private/api/report/all | — |
+
+Поле Message.data — строка JSON, например `{"code":"9638507"}`.
+Имена методов `HTTPClient` соответствуют действию и таблице.
+
+```python
+import json
+from time import time
+from src.http_client import HTTPClient
+
+client = HTTPClient("http://127.0.0.1:8000")
+client.make_user((1, int(time()), "web"))
+client.make_message((1, 0, json.dumps({"code": "9638507"}), 1, "new", 0))
+print(client.all_output(1))  # Опросить повторно до появления результата.
 ```
 
-## Stage 2. TCP RPC
+Формула (6) сохраняет Message при правом внешнем соединении с User,
+затем связывает Output по `Message.key = Output.message`. Фильтр использует
+строго `User.timestamp > now - 300`. Сообщения без User исключаются этим
+фильтром. Результат содержит уникальные `(data, response, platform)`.
 
-`RPCClient` предоставляет те же десять методов. Формат запроса и ответа:
-размер тела — 4 байта, код операции — 2 байта, затем XML UTF-8;
-порядок байт little-endian. Запросы и ответы выводятся в stdout.
+### Проверка этапа 2
 
-Сервер и демонстрация всех методов запускаются в разных терминалах:
-
-```sh
-./run.sh server
-./run.sh demo
-```
-
-Настройки: `--host` (127.0.0.1), `--port` (5000), таймаут соединения —
-5 секунд. Интервал проверки остановки сервера — 0.1 секунды.
-Переменная `PYTHON` выбирает интерпретатор для shell-скриптов.
-
-## Stage 3. Тестирование
-
-`RuleBasedStateMachine` из Hypothesis сравнивает RPC с эталонной моделью.
-Проверяются все десять методов, ошибки, граница времени и дубликаты.
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-PYTHON=.venv/bin/python ./run_tests.sh
-```
-
-Скрипт проверяет PEP8 и сохраняет покрытие ветвей в `coverage_report.txt`.
-Настройки Hypothesis: 30 сценариев, до 50 шагов, deadline=None,
-derandomize=True, database=None.
-
-На Windows: `run.bat repl`, `run.bat server`, `run.bat demo`, `run.bat test`.
+`PYTHON=.venv/bin/python sh run_http_tests.sh` запускает MBT для файлового
+хранилища, проверку асинхронного выполнения и формулы. Все вызовы восьми
+обработчиков выполняются сгенерированными Hypothesis тестами.
+Покрытие ветвей сохраняется в `http_coverage_report.txt`.
+Тесты генератора отдельно — `python3 -m unittest discover -s tests -p test_ean8.py`.
